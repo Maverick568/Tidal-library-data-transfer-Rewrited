@@ -67,9 +67,9 @@ def log_error(info, error_msg):
 # MENU - MODE SELECTION
 # ─────────────────────────────────────────────
 print("\nSelect Mode:")
-print("1 - Full Transfer (Login Source -> Export -> Login Dest -> Import)")
-print("2 - Export Only (Login Source -> Save with METADATA -> Exit)")
-print("3 - Import Only (Skip Source login, use local files with METADATA)")
+print("1 - Full Transfer (Login Source -> Export -> Login destination account -> Import)")
+print("2 - Export Only (Login Source -> Save to files -> Exit)")
+print("3 - Import Only (Skip Source login, use local files)")
 
 mode_choice = input("Enter mode (1/2/3): ").strip()
 
