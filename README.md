@@ -8,9 +8,9 @@ Mode selector:
 
 1 - Full Transfer (Login Source -> Export -> Login Destination account -> Import)
 
-2 - Export Only (Login Source -> Save with METADATA -> Exit)
+2 - Export Only (Login Source -> Save to files -> Exit)
 
-3 - Import Only (Skip Source login, use local files with METADATA)
+3 - Import Only (Skip Source login, use local files)
 
 Content selector:
 
