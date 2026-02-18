@@ -3,13 +3,16 @@ from tidalapi.exceptions import TidalAPIError
 from tqdm import tqdm
 import os
 import json
-import time
+import sys
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
 FAILED_LOG_FILE = "failed_items.txt"
 PLAYLIST_EXPORT_FILE = "playlists_export.json"
+SEPARATOR = " :: "  # Separator oddzielający ID od nazwy w plikach txt
+
+# Słownik przechowujący nazwy dla ID (Globalny Cache)
 meta_cache = {}
 
 # Initialize error log file
@@ -56,20 +59,31 @@ def get_album_name(item):
     return "Unknown Album"
 
 def log_error(info, error_msg):
-    # Print to console
     tqdm.write(f"\n[ERROR] Failed: {info}")
-    # Write to file
     with open(FAILED_LOG_FILE, "a", encoding="utf-8") as log:
         log.write(f"{info}\n   -> Reason: {error_msg}\n")
 
 # ─────────────────────────────────────────────
-# MENU
+# MENU - MODE SELECTION
 # ─────────────────────────────────────────────
-print("\nWhat do you want to transfer?")
+print("\nSelect Mode:")
+print("1 - Full Transfer (Login Source -> Export -> Login Dest -> Import)")
+print("2 - Export Only (Login Source -> Save with METADATA -> Exit)")
+print("3 - Import Only (Skip Source login, use local files with METADATA)")
+
+mode_choice = input("Enter mode (1/2/3): ").strip()
+
+enable_export = mode_choice in ("1", "2")
+enable_import = mode_choice in ("1", "3")
+
+# ─────────────────────────────────────────────
+# MENU - CONTENT SELECTION
+# ─────────────────────────────────────────────
+print("\nWhat content should be processed?")
 print("1 - Favorite Tracks")
 print("2 - Albums")
 print("3 - Artists")
-print("4 - Playlists (Cloned with custom order)")
+print("4 - Playlists")
 print("5 - Everything")
 
 choice = input("Enter number: ").strip()
@@ -80,128 +94,175 @@ transfer_artists = choice in ("3", "5")
 transfer_playlists = choice in ("4", "5")
 
 # ─────────────────────────────────────────────
-# LOGIN SOURCE
+# LOGIN SOURCE & EXPORT (Conditional)
 # ─────────────────────────────────────────────
-session1 = tidalapi.Session()
-print('\nLogin to SOURCE account (Export from):')
-session1.login_oauth_simple()
-source = session1.user.favorites
+if enable_export:
+    session1 = tidalapi.Session()
+    print('\n=== Login to SOURCE account (Export from) ===')
+    session1.login_oauth_simple()
+    source = session1.user.favorites
 
-# ─────────────────────────────────────────────
-# EXPORT
-# ─────────────────────────────────────────────
-print('\n--- EXPORTING DATA ---')
+    print('\n--- EXPORTING DATA (Saving IDs and Names) ---')
 
-# --- 1. ALBUMS ---
-if transfer_albums:
-    albums = fetch_all(source.albums, source.get_albums_count, "albums")
-    albums.sort(key=lambda x: x.user_date_added or 0)
-    with open("album_id_list.txt", "w") as f:
-        for item in albums:
-            f.write(f"{item.id}\n")
-            meta_cache[str(item.id)] = f"Album: {item.name} | Artist: {get_artist_name(item)}"
+    # --- 1. ALBUMS ---
+    if transfer_albums:
+        albums = fetch_all(source.albums, source.get_albums_count, "albums")
+        albums.sort(key=lambda x: x.user_date_added or 0)
+        with open("album_id_list.txt", "w", encoding="utf-8") as f:
+            for item in albums:
+                meta = f"Album: {item.name} | Artist: {get_artist_name(item)}"
+                # Zapisujemy w formacie: ID :: Metadata
+                f.write(f"{item.id}{SEPARATOR}{meta}\n")
+                meta_cache[str(item.id)] = meta
 
-# --- 2. ARTISTS ---
-if transfer_artists:
-    artists = fetch_all(source.artists, source.get_artists_count, "artists")
-    artists.sort(key=lambda x: x.user_date_added or 0)
-    with open("artist_id_list.txt", "w") as f:
-        for item in artists:
-            f.write(f"{item.id}\n")
-            meta_cache[str(item.id)] = f"Artist: {item.name}"
+    # --- 2. ARTISTS ---
+    if transfer_artists:
+        artists = fetch_all(source.artists, source.get_artists_count, "artists")
+        artists.sort(key=lambda x: x.user_date_added or 0)
+        with open("artist_id_list.txt", "w", encoding="utf-8") as f:
+            for item in artists:
+                meta = f"Artist: {item.name}"
+                f.write(f"{item.id}{SEPARATOR}{meta}\n")
+                meta_cache[str(item.id)] = meta
 
-# --- 3. TRACKS (FAVORITES) ---
-if transfer_tracks:
-    tracks = fetch_all(source.tracks, source.get_tracks_count, "favorite tracks")
-    tracks.sort(key=lambda x: x.user_date_added or 0)
-    with open("track_id_list.txt", "w") as f:
-        for item in tracks:
-            f.write(f"{item.id}\n")
-            meta_cache[str(item.id)] = f"Track: {item.name} | Artist: {get_artist_name(item)} | Album: {get_album_name(item)}"
+    # --- 3. TRACKS (FAVORITES) ---
+    if transfer_tracks:
+        tracks = fetch_all(source.tracks, source.get_tracks_count, "favorite tracks")
+        tracks.sort(key=lambda x: x.user_date_added or 0)
+        with open("track_id_list.txt", "w", encoding="utf-8") as f:
+            for item in tracks:
+                meta = f"Track: {item.name} | Artist: {get_artist_name(item)}"
+                f.write(f"{item.id}{SEPARATOR}{meta}\n")
+                meta_cache[str(item.id)] = meta
 
-# --- 4. PLAYLISTS (FULL EXPORT) ---
-if transfer_playlists:
-    print("\n  Fetching playlists...")
-    playlists = fetch_all(source.playlists, source.get_playlists_count, "playlists")
-    
-    playlists_data = []
-    
-    print("  Analyzing playlist content (this might take a while)...")
-    for pl in tqdm(playlists, desc="Scanning playlists"):
-        try:
-            # FIX: Fetch tracks in batches of 100 instead of 5000 at once
-            pl_items = []
-            offset = 0
-            while True:
-                # Request 100 items at a time
-                batch = pl.items(limit=100, offset=offset)
-                if not batch:
-                    break
-                pl_items.extend(batch)
-                offset += len(batch)
-            
-            track_ids_list = []
-            for item in pl_items:
-                # Ensure item is a track/video with an ID
-                if hasattr(item, 'id'):
-                    track_ids_list.append(str(item.id))
-                    # Cache metadata for playlist tracks too
-                    if str(item.id) not in meta_cache:
-                        # Safe extraction of artist name
-                        artist_name = "Unknown Artist"
+    # --- 4. PLAYLISTS (FULL EXPORT) ---
+    if transfer_playlists:
+        print("\n  Fetching playlists...")
+        playlists = fetch_all(source.playlists, source.get_playlists_count, "playlists")
+        
+        playlists_data = []
+        
+        print("  Analyzing playlist content...")
+        for pl in tqdm(playlists, desc="Scanning playlists"):
+            try:
+                pl_items = []
+                offset = 0
+                while True:
+                    batch = pl.items(limit=100, offset=offset)
+                    if not batch: break
+                    pl_items.extend(batch)
+                    offset += len(batch)
+                
+                # Zbieramy utwory jako obiekty {id, meta}
+                track_objects = []
+                for item in pl_items:
+                    if hasattr(item, 'id'):
+                        artist_name = "Unknown"
                         if hasattr(item, 'artist') and item.artist:
                             artist_name = item.artist.name
                         
-                        meta_cache[str(item.id)] = f"Track in playlist '{pl.name}': {item.name} | {artist_name}"
+                        meta_info = f"{item.name} - {artist_name}"
+                        track_objects.append({
+                            "id": str(item.id),
+                            "meta": meta_info
+                        })
+                        
+                        # Cache'ujemy też lokalnie
+                        meta_cache[str(item.id)] = f"Track in PL '{pl.name}': {meta_info}"
 
-            playlists_data.append({
-                "name": pl.name,
-                "description": pl.description,
-                "tracks": track_ids_list
-            })
-        except Exception as e:
-            print(f"  [WARN] Failed to fetch content for playlist {pl.name}: {e}")
+                playlists_data.append({
+                    "name": pl.name,
+                    "description": pl.description,
+                    "tracks": track_objects # Zapisujemy pełne obiekty
+                })
+            except Exception as e:
+                print(f"  [WARN] Failed to fetch content for playlist {pl.name}: {e}")
 
-    # Save structure to JSON
-    with open(PLAYLIST_EXPORT_FILE, "w", encoding="utf-8") as f:
-        json.dump(playlists_data, f, ensure_ascii=False, indent=4)
+        with open(PLAYLIST_EXPORT_FILE, "w", encoding="utf-8") as f:
+            json.dump(playlists_data, f, ensure_ascii=False, indent=4)
 
-print("\nData exported successfully.")
+    print("\nData exported successfully with Metadata.")
+
+# Check if we should stop here (Export Only mode)
+if not enable_import:
+    print("\n--- EXPORT ONLY MODE FINISHED ---")
+    print("Files saved locally with titles/artists. Exiting.")
+    input("Press Enter to exit...")
+    sys.exit()
+
+# If we are in Import Only mode, check files
+if enable_import and not enable_export:
+    print("\n--- SKIPPING EXPORT (Loading from local files) ---")
+    files_to_check = []
+    if transfer_albums: files_to_check.append("album_id_list.txt")
+    if transfer_artists: files_to_check.append("artist_id_list.txt")
+    if transfer_tracks: files_to_check.append("track_id_list.txt")
+    if transfer_playlists: files_to_check.append(PLAYLIST_EXPORT_FILE)
+    
+    missing = [f for f in files_to_check if not os.path.exists(f)]
+    if missing:
+        print(f"[WARNING] The following files are missing: {missing}")
+        input("Press Enter to continue anyway...")
 
 
 # ─────────────────────────────────────────────
 # LOGIN DESTINATION
 # ─────────────────────────────────────────────
 session2 = tidalapi.Session()
-print('\nLogin to DESTINATION account (Import to):')
+print('\n=== Login to DESTINATION account (Import to) ===')
 session2.login_oauth_simple()
 dest = session2.user.favorites
 
 
 # ─────────────────────────────────────────────
-# IMPORT FUNCTION (Simple Items)
+# IMPORT FUNCTION (Simple Items with Metadata Parsing)
 # ─────────────────────────────────────────────
 def add_simple_items(filename, add_fn, label):
     if not os.path.exists(filename):
+        print(f"File {filename} not found. Skipping {label}.")
         return
 
-    with open(filename) as f:
-        ids = [line.strip() for line in f if line.strip()]
+    # Wczytujemy linie
+    with open(filename, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    ids_to_process = []
+    
+    # Parsujemy plik: oddzielamy ID od Metadanych
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        
+        # Sprawdzamy czy linia ma separator " :: "
+        if SEPARATOR in line:
+            parts = line.split(SEPARATOR, 1)
+            item_id = parts[0].strip()
+            meta_info = parts[1].strip()
+            
+            # Zapisujemy metadane do cache, żeby log_error mógł ich użyć
+            meta_cache[item_id] = meta_info
+            ids_to_process.append(item_id)
+        else:
+            # Stary format (tylko ID) - kompatybilność wsteczna
+            item_id = line.strip()
+            ids_to_process.append(item_id)
 
     print(f"\nAdding {label}...")
-    for id in tqdm(ids):
+    for item_id in tqdm(ids_to_process):
         try:
-            add_fn(id)
+            add_fn(item_id)
         except Exception as e:
-            info = meta_cache.get(str(id), f"ID: {id} ({label})")
+            # Pobieramy nazwę z cache (którą przed chwilą wczytaliśmy z pliku)
+            info = meta_cache.get(str(item_id), f"ID: {item_id} (No metadata in file)")
             log_error(info, e)
 
 
 # ─────────────────────────────────────────────
-# IMPORT FUNCTION (Playlists - Cloned)
+# IMPORT FUNCTION (Playlists with Metadata Parsing)
 # ─────────────────────────────────────────────
 def import_playlists_cloned():
     if not os.path.exists(PLAYLIST_EXPORT_FILE):
+        print(f"File {PLAYLIST_EXPORT_FILE} not found. Skipping playlists.")
         return
 
     with open(PLAYLIST_EXPORT_FILE, "r", encoding="utf-8") as f:
@@ -212,23 +273,34 @@ def import_playlists_cloned():
     for pl_data in tqdm(playlists_data, desc="Creating playlists"):
         pl_name = pl_data['name']
         pl_desc = pl_data.get('description', '')
-        track_ids = pl_data.get('tracks', [])
+        raw_tracks = pl_data.get('tracks', []) # To jest teraz lista słowników lub stringów
 
         try:
-            # 1. Create new playlist on destination account
             new_pl = session2.user.create_playlist(pl_name, pl_desc)
             
-            if not track_ids:
+            if not raw_tracks:
                 continue
+            
+            # Przygotowanie listy ID i Cache'a
+            track_ids_only = []
+            
+            for t in raw_tracks:
+                if isinstance(t, dict):
+                    # Nowy format JSON: {"id": "...", "meta": "..."}
+                    tid = t['id']
+                    meta = t['meta']
+                    meta_cache[tid] = f"Track: {meta} (in PL '{pl_name}')"
+                    track_ids_only.append(tid)
+                else:
+                    # Stary format JSON: "12345" (string)
+                    track_ids_only.append(t)
 
-            # 2. Add tracks to the new playlist
+            # Próba dodania
             try:
-                # Try adding in batch (faster)
-                new_pl.add(track_ids)
+                new_pl.add(track_ids_only)
             except Exception as e:
-                # If batch fails, fallback to one-by-one to catch specific errors
                 tqdm.write(f"  Batch add failed for '{pl_name}', trying one by one...")
-                for tid in track_ids:
+                for tid in track_ids_only:
                     try:
                         new_pl.add([tid])
                     except Exception as inner_e:
