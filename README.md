@@ -6,7 +6,7 @@ I'm Maverick565, i was lost my old Github account, because of lost phone with 2F
 
 Mode selector: 
 
-1 - Full Transfer (Login Source -> Export -> Login Dest -> Import)
+1 - Full Transfer (Login Source -> Export -> Login Destination account -> Import)
 
 2 - Export Only (Login Source -> Save with METADATA -> Exit)
 
