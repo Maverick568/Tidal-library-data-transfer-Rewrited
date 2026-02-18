@@ -5,6 +5,7 @@ A tiny tool to transfer all your music between 2 Tidal accounts. I'm rewrited my
 I'm Maverick565, i was lost my old Github account, because of lost phone with 2FA. Meantime there was massive changes in Tidal API since latest version of Tidal Library Data Transfer so i decided to make new repo. I made some minor changes, now there is no separated apps for albums, artists, playlists and tracks, now you could choose action in CLI by input corresponding number. You could also transfer everything like before, just input corresponding number "1 - Full Transfer" then "5 - Everything".
 
 Mode selector: 
+
 1 - Full Transfer (Login Source -> Export -> Login Dest -> Import)
 
 2 - Export Only (Login Source -> Save with METADATA -> Exit)
@@ -12,6 +13,7 @@ Mode selector:
 3 - Import Only (Skip Source login, use local files with METADATA)
 
 Content selector:
+
 1 - Favorite Tracks
 
 2 - Albums
