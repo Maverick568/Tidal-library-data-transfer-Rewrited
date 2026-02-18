@@ -11,7 +11,7 @@ I'm Maverick565, i was lost my old Github account, because of lost phone with 2F
 5 - Everything
 
 ## Setup:
-1. Download and install my edited tidalapi so that there is no limit for 1000 songs:
+1. Download and install latest Tidal API from EbbLabs:
 
 ```bash
 python -m pip install git+https://github.com/EbbLabs/python-tidal.git
