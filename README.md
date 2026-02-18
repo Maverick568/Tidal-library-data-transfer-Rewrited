@@ -48,3 +48,24 @@ python -m pip install git+https://github.com/EbbLabs/python-tidal.git
 
 4. If you like my work and helps you, please consider donating:
 https://www.paypal.com/donate/?hosted_button_id=7CUBRK3ZGKY6A
+
+## Android Application
+
+To build the Android application, you need `buildozer` installed on a Linux machine (or WSL).
+
+1. Install dependencies:
+   ```bash
+   pip install buildozer
+   sudo apt update
+   sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+   pip3 install --user --upgrade Cython==0.29.33 virtualenv
+   ```
+
+2. Build the APK:
+   ```bash
+   buildozer android debug
+   ```
+
+3. The APK will be in the `bin/` directory. Install it on your device.
+
+Note: The app uses `tidalapi` which requires authentication via browser. The app will open the login page in your default browser.
