@@ -14,6 +14,8 @@ I'm Maverick565, i was lost my old Github account, because of lost phone with 2F
 
 5 - Everything
 
+When you make mistake for example, transfer something from wrong account, you could delete tracks, artists, playlists or albums, and also you could wipe everything, but use it carefully to not delete items from source account, double check you're logged to proper account from which you want to delete items.
+
 ## Setup:
 1. Download and install latest Tidal API from EbbLabs:
 
