@@ -36,7 +36,7 @@ For .exe you don't need to have installed dependencies.
 1. Download and install latest Tidal API from EbbLabs:
 
 ```bash
-python -m pip install git+https://github.com/EbbLabs/python-tidal.git
+pip install tidalapi
 ```
 
 2. 
