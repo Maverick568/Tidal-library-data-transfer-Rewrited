@@ -49,5 +49,4 @@ pip install tidalapi
 ```
 3. Run the script as desired.
 
-4. If you like my work and helps you, please consider donating:
-https://www.paypal.com/donate/?hosted_button_id=7CUBRK3ZGKY6A
+
